@@ -13,3 +13,8 @@ python-dotenv
 pillow
 
 ipykernel
+
+fastapi
+uvicorn[standard]
+python-multipart
+TTS
