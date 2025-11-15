@@ -2,23 +2,6 @@ services:
   - type: web
     name: digital-twin-backend
     env: python
+    runtime: python
     buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
-    startCommand: "uvicorn src.api.main:app --host 0.0.0.0 --port $PORT"
-    envVars:
-      - key: PORT
-        value: 10000
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_BASE_URL
-        sync: false
-      - key: LANGCHAIN_API_KEY
-        sync: false
-      - key: LANGCHAIN_ENDPOINT
-        sync: false
-      - key: LANGCHAIN_PROJECT
-        sync: false
-      - key: LANGCHAIN_TRACING_V2
-        sync: false
-      - key: PYTHON_VERSION
-        value: "3.11.13"   
-        sync: false
+    startCommand: "python -m uvicorn src.api.main:app --host 0.0.0.0 --port $PORT"
