@@ -1,14 +1,15 @@
 # Python 3.11.12
-
-langgraph 
+ 
 langchain
-
+langgraph
+langsmith
 langchain-openai
-langchain-chroma
 langchain-community
-langchain-text-splitters
-chromadb 
+langchain-text-splitters 
 langchain-core 
+langchain-chroma
+chromadb
+
 python-dotenv
 pillow
 

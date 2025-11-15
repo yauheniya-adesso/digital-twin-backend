@@ -4,6 +4,7 @@ Handles queries using pre-built vector store
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Annotated, Literal, TypedDict
 from dotenv import load_dotenv
@@ -14,8 +15,15 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from langsmith import traceable
 
 load_dotenv()
+
+# Enable LangSmith tracing
+os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING_V2", "false")
+os.environ["LANGCHAIN_ENDPOINT"] = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", "digital-twin")
 
 
 class AgentState(TypedDict):
@@ -296,7 +304,6 @@ Provide ONLY the speech-optimized answer with NO preamble:"""
     cleaned_content = response.content
     
     # Remove common markdown patterns that might slip through
-    import re
     cleaned_content = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned_content)  # **bold**
     cleaned_content = re.sub(r'\*([^*]+)\*', r'\1', cleaned_content)      # *italic*
     cleaned_content = re.sub(r'`([^`]+)`', r'\1', cleaned_content)        # `code`
@@ -378,17 +385,25 @@ class DigitalTwin:
         except Exception as e:
             print(f"Note: Could not save graph visualization: {e}\n")
     
-    def ask(self, question: str) -> str:
-        """Ask a question."""
-        state = {
-            "messages": [HumanMessage(content=question)],
-            "english_query": "",
-            "vector_store": self.vector_store,
-            "raw_answer": ""
-        }
+    def ask(self, question: str, user_id: str = "anonymous") -> str:
+        """Ask a question with user tracking."""
         
-        result = self.graph.invoke(state)
-        return result["messages"][-1].content
+        @traceable(
+            run_type="chain",
+            name="digital_twin_query",
+            metadata={"user_id": user_id}
+        )
+        def _ask_with_tracking(question: str):
+            state = {
+                "messages": [HumanMessage(content=question)],
+                "english_query": "",
+                "vector_store": self.vector_store,
+                "raw_answer": ""
+            }
+            result = self.graph.invoke(state)
+            return result["messages"][-1].content
+        
+        return _ask_with_tracking(question)
 
 
 if __name__ == "__main__":
