@@ -22,6 +22,7 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     english_query: str
     vector_store: Chroma
+    raw_answer: str  # Store the answer before speech optimization
 
 
 def load_vector_store():
@@ -252,7 +253,70 @@ CONTEXT:
     ]
     
     response = llm.invoke(messages)
+    
+    # Store raw answer for speech optimization
+    state["raw_answer"] = response.content
     state["messages"].append(AIMessage(content=response.content))
+    
+    return state
+
+
+def speech_optimization_node(state: AgentState) -> AgentState:
+    """Optimize answer for voice output."""
+    
+    llm = ChatOpenAI(
+        model="gpt-4o",  
+        temperature=0
+    )
+    
+    raw_answer = state["raw_answer"]
+    
+    speech_prompt = f"""You are a speech optimization assistant. Transform the following answer to be natural and clear when spoken aloud by a text-to-speech system.
+
+CRITICAL RULES:
+1. Remove ALL markdown formatting (**bold**, *italic*, `code`, etc.) - just plain text
+2. Remove ALL special characters like asterisks, backticks, underscores used for formatting
+3. Do NOT add any preamble like "Sure! Here's..." or "Here is..." - start DIRECTLY with the answer content
+4. Use simple, conversational language
+5. Break long sentences into shorter ones for better pacing
+6. Replace technical jargon with clear explanations when possible
+7. Add natural transitions between ideas
+8. Keep the same factual content, just make it speech-friendly
+9. Keep it concise but natural
+10. Article titles should be mentioned naturally without quotes or formatting (e.g., "the article Denoising Images with Autoencoders" not "the article *Denoising Images with Autoencoders*")
+
+ORIGINAL ANSWER:
+{raw_answer}
+
+Provide ONLY the speech-optimized answer with NO preamble:"""
+    
+    response = llm.invoke([HumanMessage(content=speech_prompt)])
+    
+    # Additional cleanup to ensure no markdown artifacts remain
+    cleaned_content = response.content
+    
+    # Remove common markdown patterns that might slip through
+    import re
+    cleaned_content = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned_content)  # **bold**
+    cleaned_content = re.sub(r'\*([^*]+)\*', r'\1', cleaned_content)      # *italic*
+    cleaned_content = re.sub(r'`([^`]+)`', r'\1', cleaned_content)        # `code`
+    cleaned_content = re.sub(r'_([^_]+)_', r'\1', cleaned_content)        # _underline_
+    cleaned_content = re.sub(r'#{1,6}\s+', '', cleaned_content)           # # headers
+    
+    # Remove any preamble phrases if they slipped through
+    preamble_patterns = [
+        r'^Sure[!,.]?\s+Here[\'s\s]+.*?:\s*',
+        r'^Here[\'s\s]+.*?:\s*',
+        r'^Okay[!,.]?\s+',
+        r'^Alright[!,.]?\s+'
+    ]
+    for pattern in preamble_patterns:
+        cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.IGNORECASE)
+    
+    cleaned_content = cleaned_content.strip()
+    
+    # Replace the last message with speech-optimized version
+    state["messages"][-1] = AIMessage(content=cleaned_content)
     
     return state
 
@@ -268,6 +332,7 @@ def create_graph(vector_store: Chroma):
     workflow.add_node("medium", retrieve_medium)
     workflow.add_node("general", retrieve_general)
     workflow.add_node("answer", answer_node)
+    workflow.add_node("speech_optimize", speech_optimization_node)
     
     # Edges
     workflow.add_edge(START, "router")
@@ -285,7 +350,8 @@ def create_graph(vector_store: Chroma):
     workflow.add_edge("github", "answer")
     workflow.add_edge("medium", "answer")
     workflow.add_edge("general", "answer")
-    workflow.add_edge("answer", END)
+    workflow.add_edge("answer", "speech_optimize")
+    workflow.add_edge("speech_optimize", END)
     
     return workflow.compile()
 
@@ -317,7 +383,8 @@ class DigitalTwin:
         state = {
             "messages": [HumanMessage(content=question)],
             "english_query": "",
-            "vector_store": self.vector_store
+            "vector_store": self.vector_store,
+            "raw_answer": ""
         }
         
         result = self.graph.invoke(state)
