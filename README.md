@@ -2,6 +2,11 @@
 
 A conversational AI system that serves as a digital twin, providing intelligent responses about professional background, projects, and published articles. The system uses RAG (Retrieval-Augmented Generation) with vector search and includes text-to-speech capabilities for natural voice interactions.
 
+<figure>
+  <img src="langgraph_visualization.png" alt="LangGraph Workflow Diagram: Multi-Source Agent Routing and Processing" />
+  <figcaption>Figure 1: LangGraph Workflow Diagram: Multi-Source Agent Routing and Processing</figcaption>
+</figure>
+
 ## Features
 
 - **Intelligent Query Routing**: Automatically routes questions to the appropriate data source (LinkedIn, GitHub, Medium)
