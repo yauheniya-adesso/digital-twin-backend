@@ -1,0 +1,15 @@
+# Python 3.11.12
+
+langgraph 
+langchain
+
+langchain-openai
+langchain-chroma
+langchain-community
+langchain-text-splitters
+chromadb 
+langchain-core 
+python-dotenv
+pillow
+
+ipykernel
