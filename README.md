@@ -179,6 +179,7 @@ Set these in your Render dashboard:
 - `LANGCHAIN_ENDPOINT`
 - `LANGCHAIN_API_KEY`
 - `LANGCHAIN_PROJECT`
+- `PYTHON_VERSION`
 
 ## Data Processing
 
