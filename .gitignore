@@ -5,6 +5,7 @@ data_raw/*
 !data_raw/.gitkeep
 !data_raw/download_medium.py
 !data_raw/download_readmes.py
+notebooks/response_1763218460326.json
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,macos,linux,windows
