@@ -3,79 +3,91 @@ Digital Twin API - FastAPI Backend
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import io
 import sys
 from pathlib import Path
-from contextlib import asynccontextmanager
 
-# Add parent directory to path to import your modules
+# Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from src.run_agent import DigitalTwin
-from src.api.tts_service import CoquiTTSService
+app = FastAPI(title="Digital Twin API")
 
-# Initialize services (only once at startup)
-digital_twin = None
-tts_service = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    global digital_twin, tts_service
-    print("Initializing Digital Twin...")
-    digital_twin = DigitalTwin()
-    print("Initializing TTS...")
-    tts_service = CoquiTTSService(language="en_vctk", speaker="p225")
-    print("✓ Ready!")
-    
-    yield  # Application runs here
-    
-    # Shutdown (cleanup if needed)
-    print("Shutting down...")
-
-app = FastAPI(title="Digital Twin API", lifespan=lifespan)
-
-# CORS - allow your GitHub Pages domain
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Local development
-        "https://yourusername.github.io",  # Replace with your GitHub Pages URL
-        "*"  # Remove this in production
-    ],
+    allow_origins=["*"],  # Configure this properly in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Lazy initialization - services load on first request
+_digital_twin = None
+_tts_service = None
+
+
+def get_digital_twin():
+    """Initialize Digital Twin on first use"""
+    global _digital_twin
+    if _digital_twin is None:
+        print("Initializing Digital Twin...")
+        from src.run_agent import DigitalTwin
+        _digital_twin = DigitalTwin()
+        print("✓ Digital Twin ready")
+    return _digital_twin
+
+
+def get_tts_service():
+    """Initialize TTS on first use"""
+    global _tts_service
+    if _tts_service is None:
+        print("Initializing TTS...")
+        from src.api.tts_service import CoquiTTSService
+        _tts_service = CoquiTTSService(language="en_vctk", speaker="p225")
+        print("✓ TTS ready")
+    return _tts_service
+
+
 class AskRequest(BaseModel):
     question: str
     user_id: str = "anonymous"
 
-class AskResponse(BaseModel):
-    text: str
-    audio_url: str
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"message": "Digital Twin API", "status": "online"}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
+
 
 @app.post("/api/ask")
 async def ask_question(request: AskRequest):
     """
-    Ask a question - returns text answer and audio URL
+    Ask a question - returns text answer and audio
     """
     try:
-        # Pass user_id for tracking
+        # Get services (lazy initialization)
+        digital_twin = get_digital_twin()
+        tts_service = get_tts_service()
+        
+        # Get answer
         answer_text = digital_twin.ask(request.question, user_id=request.user_id)
         
+        # Generate audio
         audio_bytes = tts_service.text_to_audio(answer_text)
         
         return {
             "text": answer_text,
             "audio": audio_bytes.hex()
         }
+    
     except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
